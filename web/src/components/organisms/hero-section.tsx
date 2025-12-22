@@ -1,10 +1,27 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Button } from "@/components/atoms/button"
 import { ArrowRight } from "lucide-react"
 import Link from "next/link"
+import { api } from "@/lib/api"
 
 export function HeroSection() {
+    const [stats, setStats] = useState<{ total_samples: number; status: string } | null>(null)
+
+    useEffect(() => {
+        async function fetchStats() {
+            try {
+                const data = await api.getStats()
+                setStats(data)
+            } catch (error) {
+                console.error("Failed to fetch stats:", error)
+                setStats({ total_samples: 0, status: "offline" })
+            }
+        }
+        fetchStats()
+    }, [])
+
     return (
         <section className="relative flex min-h-[80vh] flex-col items-center justify-center overflow-hidden px-4 md:px-8">
             {/* Background Gradients */}
@@ -38,10 +55,14 @@ export function HeroSection() {
                 </div>
 
                 <div className="mt-16 inline-flex items-center gap-2 text-sm text-zinc-500 bg-white/5 px-6 py-2 rounded-full backdrop-blur-sm border border-white/5 hover:bg-white/10 transition-colors cursor-default">
-                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>
-                    <span className="font-medium text-zinc-300">System Operational</span>
+                    <div className={`w-2 h-2 rounded-full ${stats?.status === "operational" ? "bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-yellow-500"}`}></div>
+                    <span className="font-medium text-zinc-300">
+                        {stats?.status === "operational" ? "System Operational" : "Loading..."}
+                    </span>
                     <span className="mx-2 text-zinc-700">|</span>
-                    <span className="font-mono text-zinc-400">1,204 Sampled Frequencies</span>
+                    <span className="font-mono text-zinc-400">
+                        {stats ? `${stats.total_samples.toLocaleString()} Samples` : "—"}
+                    </span>
                 </div>
             </div>
 
