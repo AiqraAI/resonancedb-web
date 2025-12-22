@@ -11,6 +11,8 @@ import type { SampleListItem } from "@/lib/types"
 export function SampleGrid() {
     const [samples, setSamples] = useState<SampleListItem[]>([])
     const [loading, setLoading] = useState(true)
+    const [playingId, setPlayingId] = useState<string | null>(null)
+    const [downloadingId, setDownloadingId] = useState<string | null>(null)
 
     useEffect(() => {
         async function fetchSamples() {
@@ -25,6 +27,76 @@ export function SampleGrid() {
         }
         fetchSamples()
     }, [])
+
+    const handleDownload = async (id: string, material: string) => {
+        try {
+            setDownloadingId(id)
+            const sample = await api.getSample(id)
+
+            // Create JSON blob
+            const jsonString = JSON.stringify(sample, null, 2)
+            const blob = new Blob([jsonString], { type: "application/json" })
+            const url = URL.createObjectURL(blob)
+
+            // Trigger download
+            const a = document.createElement("a")
+            a.href = url
+            a.download = `${material.replace(/\s+/g, "_")}_${id.slice(0, 8)}.json`
+            document.body.appendChild(a)
+            a.click()
+
+            // Cleanup
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+        } catch (error) {
+            console.error("Download failed:", error)
+        } finally {
+            setDownloadingId(null)
+        }
+    }
+
+    const handlePlay = async (id: string) => {
+        try {
+            setPlayingId(id)
+            const sample = await api.getSample(id)
+
+            if (!sample.vibration || sample.vibration.length === 0) {
+                console.warn("No vibration data to play")
+                return
+            }
+
+            // Simple sonification
+            const AudioContext = window.AudioContext || (window as any).webkitAudioContext
+            const audioCtx = new AudioContext()
+
+            // Normalize data to -1..1
+            const maxVal = Math.max(...sample.vibration.map(Math.abs)) || 1
+            const normalizedData = sample.vibration.map(v => v / maxVal)
+
+            // Create buffer
+            const buffer = audioCtx.createBuffer(1, normalizedData.length, sample.sample_rate_hz)
+            const channelData = buffer.getChannelData(0)
+
+            for (let i = 0; i < normalizedData.length; i++) {
+                channelData[i] = normalizedData[i]
+            }
+
+            // Play
+            const source = audioCtx.createBufferSource()
+            source.buffer = buffer
+            source.connect(audioCtx.destination)
+            source.start()
+
+            source.onended = () => {
+                setPlayingId(null)
+                audioCtx.close()
+            }
+
+        } catch (error) {
+            console.error("Playback failed:", error)
+            setPlayingId(null)
+        }
+    }
 
     if (loading) {
         return (
@@ -75,11 +147,31 @@ export function SampleGrid() {
                         )}
                     </CardContent>
                     <CardFooter className="p-4 pt-0 flex justify-between">
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full hover:bg-primary/20 hover:text-primary">
-                            <Play className="h-4 w-4" />
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 rounded-full hover:bg-primary/20 hover:text-primary"
+                            onClick={() => handlePlay(sample.id)}
+                            disabled={playingId === sample.id}
+                        >
+                            {playingId === sample.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Play className="h-4 w-4" />
+                            )}
                         </Button>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full hover:bg-white/10">
-                            <Download className="h-4 w-4" />
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 rounded-full hover:bg-white/10"
+                            onClick={() => handleDownload(sample.id, sample.material)}
+                            disabled={downloadingId === sample.id}
+                        >
+                            {downloadingId === sample.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Download className="h-4 w-4" />
+                            )}
                         </Button>
                     </CardFooter>
                 </Card>
