@@ -241,7 +241,7 @@ export default function SettingsPage() {
                                     </div>
                                     <div>
                                         <h3 className="text-xl font-bold text-white">New Key Generated!</h3>
-                                        <p className="text-sm text-muted-foreground">Save it now — it won't be shown again</p>
+                                        <p className="text-sm text-muted-foreground">Save it now — it won&apos;t be shown again</p>
                                     </div>
                                 </div>
 
