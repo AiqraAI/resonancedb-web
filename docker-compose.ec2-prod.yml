@@ -34,6 +34,8 @@ services:
       dockerfile: Dockerfile
     container_name: resonancedb-api
     env_file: .env
+    environment:
+      - CORS_ORIGINS=["http://localhost:3000","http://localhost:8000","https://resonancedb.aiqra.ai","https://www.resonancedb.aiqra.ai"]
     networks:
       - resonancedb-network
     labels:
