@@ -15,17 +15,20 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
     const pathname = usePathname()
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-    const { user, logout } = useAuth()
+    const { user, logout, isAuthenticated } = useAuth()
 
-    const navItems = [
-        { href: "/dashboard", icon: LayoutDashboard, label: "Overview" },
-        { href: "/dashboard/submit", icon: FileUp, label: "New Submission" },
-        { href: "/dashboard/predict", icon: Brain, label: "Predict" },
-        { href: "/dashboard/explore", icon: Search, label: "Explore" },
-        { href: "/dashboard/visualize", icon: Activity, label: "Visualize" },
-        { href: "/dashboard/leaderboard", icon: BarChart2, label: "Leaderboard" },
-        { href: "/dashboard/settings", icon: Settings, label: "Settings" },
+    const allNavItems = [
+        { href: "/dashboard", icon: LayoutDashboard, label: "Overview", authRequired: false },
+        { href: "/dashboard/submit", icon: FileUp, label: "New Submission", authRequired: true },
+        { href: "/dashboard/predict", icon: Brain, label: "Predict", authRequired: false },
+        { href: "/dashboard/explore", icon: Search, label: "Explore", authRequired: false },
+        { href: "/dashboard/visualize", icon: Activity, label: "Visualize", authRequired: false },
+        { href: "/dashboard/leaderboard", icon: BarChart2, label: "Leaderboard", authRequired: false },
+        { href: "/dashboard/settings", icon: Settings, label: "Settings", authRequired: true },
     ]
+
+    // Filter nav items based on auth state
+    const navItems = allNavItems.filter(item => !item.authRequired || isAuthenticated)
 
     const handleLogout = () => {
         logout()

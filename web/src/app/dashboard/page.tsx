@@ -87,9 +87,11 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                     <Button variant="outline" className="w-full sm:w-auto">Download Report</Button>
-                    <Link href="/dashboard/submit" className="w-full sm:w-auto">
-                        <Button variant="premium" className="w-full">New Submission</Button>
-                    </Link>
+                    {isAuthenticated && (
+                        <Link href="/dashboard/submit" className="w-full sm:w-auto">
+                            <Button variant="premium" className="w-full">New Submission</Button>
+                        </Link>
+                    )}
                 </div>
             </div>
 
