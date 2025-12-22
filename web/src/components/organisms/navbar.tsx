@@ -41,12 +41,16 @@ export function Navbar() {
                         {/* Search Atom could go here */}
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" className="text-foreground/60">
-                            Log In
-                        </Button>
-                        <Button variant="glow" size="sm">
-                            Sign Up
-                        </Button>
+                        <Link href="/register">
+                            <Button variant="ghost" size="sm" className="text-foreground/60">
+                                Log In
+                            </Button>
+                        </Link>
+                        <Link href="/register">
+                            <Button variant="glow" size="sm">
+                                Sign Up
+                            </Button>
+                        </Link>
                     </div>
                 </div>
             </div>
