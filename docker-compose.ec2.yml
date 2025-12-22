@@ -1,0 +1,29 @@
+version: '3.8'
+
+# =============================================================================
+# EC2 + RDS DEPLOYMENT - API Only
+# =============================================================================
+#
+# Usage:
+#   1. Create .env file with DATABASE_URL, API_KEY_SECRET
+#   2. Run: docker compose -f docker-compose.ec2.yml up -d --build
+#
+# This compose file is designed for EC2 instances using AWS RDS
+# (no local PostgreSQL container)
+# =============================================================================
+
+services:
+  api:
+    build: .
+    container_name: resonancedb-api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      API_KEY_SECRET: ${API_KEY_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["*"]}
+      DEBUG: "false"
+    volumes:
+      - ./models:/app/models:ro
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped

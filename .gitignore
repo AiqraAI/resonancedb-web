@@ -31,3 +31,9 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+
+# Security - SSH Keys
+*.pem
+
+# Temporary files
+implementation_plan.md.resolved
