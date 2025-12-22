@@ -109,7 +109,7 @@ export default function RegisterPage() {
                                 </div>
                                 <CardTitle className="text-2xl">Welcome to ResonanceDB!</CardTitle>
                                 <CardDescription>
-                                    Your API key has been generated. <strong>Save it now</strong> — it won't be shown again.
+                                    Your API key has been generated. <strong>Save it now</strong> — it won&apos;t be shown again.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
