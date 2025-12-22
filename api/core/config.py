@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     
     # Security
     API_KEY_SECRET: str = Field(
-        default="dev-secret-change-in-production",
-        description="Secret for hashing API keys"
+        ...,  # Required - no default, must be set via environment
+        description="Secret for hashing API keys (REQUIRED - generate with: openssl rand -hex 32)"
     )
     API_KEY_PREFIX: str = "rdb_live_"
     
@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:3001", "http://localhost:8000"]
+    
+    # Redis (for rate limiting in production)
+    REDIS_URL: str | None = Field(
+        default=None,
+        description="Redis URL for rate limiting (e.g., redis://localhost:6379). If not set, uses in-memory storage."
+    )
     
     class Config:
         env_file = ".env"

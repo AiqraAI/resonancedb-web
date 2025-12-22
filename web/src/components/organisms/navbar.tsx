@@ -41,7 +41,7 @@ export function Navbar() {
                         {/* Search Atom could go here */}
                     </div>
                     <div className="flex items-center gap-2">
-                        <Link href="/register">
+                        <Link href="/login">
                             <Button variant="ghost" size="sm" className="text-foreground/60">
                                 Log In
                             </Button>

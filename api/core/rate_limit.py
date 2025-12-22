@@ -26,11 +26,14 @@ def get_api_key_or_ip(request: Request) -> str:
     return get_remote_address(request)
 
 
+# Get storage URI from settings - use Redis in production if configured
+storage_uri = settings.REDIS_URL or "memory://"
+
 # Create limiter instance
 limiter = Limiter(
     key_func=get_api_key_or_ip,
     default_limits=["100/hour"],  # Default for unauthenticated requests
-    storage_uri="memory://",  # Use Redis in production: "redis://localhost:6379"
+    storage_uri=storage_uri,
 )
 
 

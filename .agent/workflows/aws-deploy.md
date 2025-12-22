@@ -4,11 +4,19 @@ description: Deploy ResonanceDB to AWS EC2 and RDS
 
 # AWS Deployment Workflow
 
+## Live Endpoints
+
+- **API**: http://44.211.73.228:8000/
+- **API Docs**: http://44.211.73.228:8000/docs
+- **Frontend**: http://44.211.73.228:3000/
+
+---
+
 ## Connection Credentials
 
-### EC2 Instance (API Server)
-- **Region**: ap-southeast-1 (Singapore)
-- **Host**: ec2-18-141-205-67.ap-southeast-1.compute.amazonaws.com
+### EC2 Instance (API + Frontend)
+- **Region**: us-east-1
+- **Public IP**: 44.211.73.228
 - **User**: ec2-user
 - **Key File**: `resonancedb-key.pem` (in project root)
 
@@ -17,67 +25,63 @@ description: Deploy ResonanceDB to AWS EC2 and RDS
 - **Port**: 5432
 - **Database**: resonancedb
 - **Username**: postgres
+- **Password**: YourSecurePassword123!
 
 ---
 
 ## SSH Connection
 
 ```bash
-# Make key readable (first time only)
-chmod 400 resonancedb-key.pem
+# Windows - fix key permissions first
+icacls "resonancedb-key.pem" /inheritance:r /grant:r "%USERNAME%:(R)"
 
 # Connect to EC2
-ssh -i "resonancedb-key.pem" ec2-user@ec2-18-141-205-67.ap-southeast-1.compute.amazonaws.com
+ssh -i "resonancedb-key.pem" ec2-user@44.211.73.228
 ```
 
 ---
 
-## Deploy API (Step 3.4)
-
-After connecting via SSH:
+## Deploy Commands
 
 ```bash
-# Clone the repo
-git clone https://github.com/AiqraAI/resonancedb-web.git
 cd resonancedb-web
 
-# Create .env file
-cat > .env << 'EOF'
-DATABASE_URL=postgresql+asyncpg://postgres:YOUR_PASSWORD@resonancedb.c98e8gec41j1.ap-southeast-1.rds.amazonaws.com:5432/resonancedb
-API_KEY_SECRET=your-random-secret-key-here
-CORS_ORIGINS=["*"]
-EOF
+# Pull latest code
+git pull
 
-# Start the API
-docker-compose up -d
+# Rebuild and restart services
+docker compose -f docker-compose.ec2.yml down
+docker compose -f docker-compose.ec2.yml build --no-cache
+docker compose -f docker-compose.ec2.yml up -d
 
-# Check if running
-docker ps
-curl http://localhost:8000/docs
+# View logs
+docker compose -f docker-compose.ec2.yml logs -f
 ```
 
 ---
 
-## Test API (Step 3.5)
+## Environment Variables (.env)
 
-- API Docs: http://18.141.205.67:8000/docs
-- Health Check: http://18.141.205.67:8000/health
+Located at `/home/ec2-user/resonancedb-web/.env`:
+
+```
+DATABASE_URL=postgresql+asyncpg://postgres:YourSecurePassword123!@resonancedb.c98e8gec41j1.ap-southeast-1.rds.amazonaws.com:5432/resonancedb
+API_KEY_SECRET=resonancedb-api-secret-key-2024-secure
+```
 
 ---
 
-## Useful Commands
+## Troubleshooting
 
+### Disk Full
 ```bash
-# View logs
-docker-compose logs -f
+docker system prune -af
+docker builder prune -af
+df -h
+```
 
-# Restart services
-docker-compose restart
-
-# Stop services
-docker-compose down
-
-# Update code
-git pull
-docker-compose up -d --build
+### View Container Logs
+```bash
+docker logs resonancedb-api
+docker logs resonancedb-web
 ```

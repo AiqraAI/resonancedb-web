@@ -120,10 +120,9 @@ class Contributor(Base):
         
         remaining = self.tier.samples_to_next_tier(self.validated_submissions)
         return {
-            "current_tier": self.tier.value,
+            "current": self.validated_submissions,
+            "required": self.validated_submissions + remaining,
             "next_tier": next_tier.value,
-            "validated_submissions": self.validated_submissions,
-            "samples_remaining": remaining,
         }
 
 

@@ -1,5 +1,10 @@
 version: '3.8'
 
+# =============================================================================
+# DEVELOPMENT ONLY - Do not use in production!
+# For production, use docker-compose.prod.yml
+# =============================================================================
+
 services:
   db:
     image: postgres:16-alpine
@@ -13,7 +18,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U resonance -d resonancedb"]
+      test: [ "CMD-SHELL", "pg_isready -U resonance -d resonancedb" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -28,12 +33,30 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+asyncpg://resonance:resonance_dev@db:5432/resonancedb
-      API_KEY_SECRET: change-this-in-production
+      # DEV ONLY - This secret is for local development only!
+      API_KEY_SECRET: dev_secret_not_for_production_use_openssl_rand_hex_32
       DEBUG: "true"
     volumes:
       - .:/app
       - ./models:/app/models:ro
     command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: resonancedb-web
+    ports:
+      - "3001:3000"
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
 
 volumes:
   postgres_data:

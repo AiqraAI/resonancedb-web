@@ -9,6 +9,7 @@ import type {
     SampleDetail,
     PredictRequest,
     PredictResponse,
+    StatsResponse,
     ApiError,
 } from "./types"
 
@@ -136,6 +137,12 @@ class ApiClient {
             method: "POST",
             body: JSON.stringify(data),
         })
+    }
+
+    // --- Stats Endpoints ---
+
+    async getStats(): Promise<StatsResponse> {
+        return this.request<StatsResponse>("/api/v1/stats")
     }
 }
 

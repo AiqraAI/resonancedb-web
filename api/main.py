@@ -102,6 +102,29 @@ async def health_check():
     return {"status": "ok"}
 
 
+@app.get("/api/v1/stats", tags=["Health"])
+async def get_stats():
+    """Get public database statistics."""
+    from api.core.database import async_session_maker
+    from sqlalchemy import select, func
+    from api.models.sample import Sample
+    from api.models.contributor import Contributor
+    
+    async with async_session_maker() as session:
+        total_samples = await session.scalar(select(func.count(Sample.id)))
+        validated_samples = await session.scalar(
+            select(func.count(Sample.id)).where(Sample.validated == True)
+        )
+        total_contributors = await session.scalar(select(func.count(Contributor.id)))
+        
+        return {
+            "total_samples": total_samples or 0,
+            "validated_samples": validated_samples or 0,
+            "total_contributors": total_contributors or 0,
+            "status": "operational"
+        }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(

@@ -135,6 +135,15 @@ export interface PredictResponse {
     features?: Record<string, number>
 }
 
+// --- Stats Types ---
+
+export interface StatsResponse {
+    total_samples: number
+    validated_samples: number
+    total_contributors: number
+    status: string
+}
+
 // --- API Error ---
 
 export interface ApiError {
