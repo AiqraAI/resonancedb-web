@@ -5,7 +5,7 @@ version: '3.8'
 # =============================================================================
 #
 # Usage:
-#   1. Create .env file with DATABASE_URL, API_KEY_SECRET
+#   1. Create .env file with DATABASE_URL, API_KEY_SECRET, CORS_ORIGINS
 #   2. Run: docker compose -f docker-compose.ec2.yml up -d --build
 #
 # This compose file is designed for EC2 instances using AWS RDS
@@ -18,10 +18,9 @@ services:
     container_name: resonancedb-api
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      API_KEY_SECRET: ${API_KEY_SECRET}
-      CORS_ORIGINS: ${CORS_ORIGINS:-["*"]}
       DEBUG: "false"
     volumes:
       - ./models:/app/models:ro
