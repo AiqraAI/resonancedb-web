@@ -1,0 +1,40 @@
+# Environment files - should never be in image
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+
+# Node (web directory)
+web/node_modules/
+web/.next/
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# Database files
+*.db
+*.sqlite
+
+# Local files
+*.pem
+*.log
+
+# Agent/Workflow files
+.agent/
