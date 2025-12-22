@@ -76,19 +76,19 @@ export default function DashboardPage() {
 
     return (
         <div className="space-y-8">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold tracking-tight text-white">Overview</h2>
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">Overview</h2>
                     {stats && (
                         <p className={`text-sm ${tierColorMap[stats.tier] || "text-muted-foreground"}`}>
                             {stats.tier.charAt(0).toUpperCase() + stats.tier.slice(1)} Tier
                         </p>
                     )}
                 </div>
-                <div className="flex items-center space-x-2">
-                    <Button variant="outline">Download Report</Button>
-                    <Link href="/dashboard/submit">
-                        <Button variant="premium">New Submission</Button>
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <Button variant="outline" className="w-full sm:w-auto">Download Report</Button>
+                    <Link href="/dashboard/submit" className="w-full sm:w-auto">
+                        <Button variant="premium" className="w-full">New Submission</Button>
                     </Link>
                 </div>
             </div>
