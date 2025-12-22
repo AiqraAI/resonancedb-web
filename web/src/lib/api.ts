@@ -106,7 +106,7 @@ class ApiClient {
     // --- Sample Endpoints ---
 
     async submitSample(data: SampleCreate): Promise<SampleResponse> {
-        return this.request<SampleResponse>("/api/v1/samples/", {
+        return this.request<SampleResponse>("/api/v1/samples", {
             method: "POST",
             body: JSON.stringify(data),
         })
@@ -123,7 +123,7 @@ class ApiClient {
         })
         if (material) params.set("material", material)
 
-        return this.request<SampleListResponse>(`/api/v1/samples/?${params}`)
+        return this.request<SampleListResponse>(`/api/v1/samples?${params}`)
     }
 
     async getSample(id: string): Promise<SampleDetail> {
@@ -133,7 +133,7 @@ class ApiClient {
     // --- Prediction Endpoints ---
 
     async predict(data: PredictRequest): Promise<PredictResponse> {
-        return this.request<PredictResponse>("/api/v1/predict/", {
+        return this.request<PredictResponse>("/api/v1/predict", {
             method: "POST",
             body: JSON.stringify(data),
         })
