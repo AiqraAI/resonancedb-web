@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (Self-hosted on VPS)
+  db:
+    image: postgres:16-alpine
+    container_name: resonancedb-postgres
+    environment:
+      POSTGRES_DB: resonancedb
+      POSTGRES_USER: resonance
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-resonance_prod}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - traefik-proxy
+      - internal-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U resonance -d resonancedb" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis (For Rate Limiting)
+  redis:
+    image: redis:alpine
+    container_name: resonancedb-redis
+    networks:
+      - internal-network
+    restart: unless-stopped
+
+  # FastAPI Backend
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: resonancedb-api
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://resonance:${DB_PASSWORD:-resonance_prod}@db:5432/resonancedb
+      - REDIS_URL=redis://redis:6379
+      - CORS_ORIGINS=["https://resonancedb.aiqra.ai","https://www.resonancedb.aiqra.ai"]
+    networks:
+      - traefik-proxy
+      - internal-network
+    labels:
+      - "traefik.enable=true"
+      # API on api.resonancedb.aiqra.ai
+      - "traefik.http.routers.resonancedb-api.rule=Host(`api.resonancedb.aiqra.ai`)"
+      - "traefik.http.routers.resonancedb-api.entrypoints=websecure"
+      - "traefik.http.routers.resonancedb-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.resonancedb-api.loadbalancer.server.port=8000"
+      # Also respond on /api path for main domain (optional, keeping consistent with EC2 config)
+      - "traefik.http.routers.resonancedb-api-path.rule=Host(`resonancedb.aiqra.ai`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.resonancedb-api-path.entrypoints=websecure"
+      - "traefik.http.routers.resonancedb-api-path.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.resonancedb-api-path.middlewares=api-stripprefix"
+      - "traefik.http.middlewares.api-stripprefix.stripprefix.prefixes=/api"
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # Next.js Frontend
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_API_URL: https://api.resonancedb.aiqra.ai
+    container_name: resonancedb-web
+    networks:
+      - traefik-proxy
+      - internal-network
+    labels:
+      - "traefik.enable=true"
+      # Frontend on resonancedb.aiqra.ai
+      - "traefik.http.routers.resonancedb-web.rule=Host(`resonancedb.aiqra.ai`) || Host(`www.resonancedb.aiqra.ai`)"
+      - "traefik.http.routers.resonancedb-web.entrypoints=websecure"
+      - "traefik.http.routers.resonancedb-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.resonancedb-web.loadbalancer.server.port=3000"
+    restart: unless-stopped
+    environment:
+      # OAuth Variables - These must be set in your .env file on the VPS
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=https://resonancedb.aiqra.ai
+    depends_on:
+      - api
+
+networks:
+  traefik-proxy:
+    external: true
+  internal-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

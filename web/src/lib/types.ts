@@ -32,6 +32,7 @@ export interface ContributorWithKey {
 export interface ContributorStats {
     id: string
     email: string
+    display_name?: string
     tier: ContributorTier
     total_submissions: number
     validated_submissions: number

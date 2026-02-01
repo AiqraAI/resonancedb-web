@@ -117,3 +117,81 @@ async def get_me(
 ) -> ContributorResponse:
     """Get the authenticated contributor's profile."""
     return ContributorResponse.model_validate(contributor)
+
+
+from pydantic import BaseModel
+
+class OAuthLoginRequest(BaseModel):
+    email: str
+    name: str | None = None
+    provider: str  # "google" or "github"
+
+
+class OAuthLoginResponse(BaseModel):
+    id: str
+    email: str
+    api_key: str | None  # Only returned for first-time users
+    tier: str
+    display_name: str | None
+    is_new_user: bool
+    message: str
+
+
+@router.post(
+    "/oauth-login",
+    response_model=OAuthLoginResponse,
+    summary="OAuth login/register",
+    description="Find or create a contributor from OAuth login. Returns API key for new users.",
+)
+async def oauth_login(
+    data: OAuthLoginRequest,
+    db: DBSession,
+) -> OAuthLoginResponse:
+    """
+    Handle OAuth login by finding or creating a contributor.
+    
+    - If email exists: Return existing contributor (no API key shown)
+    - If email is new: Create contributor and return with API key
+    """
+    # Check if email already exists
+    result = await db.execute(
+        select(Contributor).where(Contributor.email == data.email)
+    )
+    existing = result.scalar_one_or_none()
+    
+    if existing:
+        return OAuthLoginResponse(
+            id=str(existing.id),
+            email=existing.email,
+            api_key=None,  # Don't expose existing key
+            tier=existing.tier.value,
+            display_name=existing.display_name,
+            is_new_user=False,
+            message="Welcome back!",
+        )
+    
+    # Create new contributor
+    api_key, key_hash = generate_api_key()
+    
+    contributor = Contributor(
+        email=data.email,
+        display_name=data.name,
+        api_key_hash=key_hash,
+        tier=ContributorTier.STARTER,
+        total_submissions=0,
+        validated_submissions=0,
+    )
+    
+    db.add(contributor)
+    await db.flush()
+    await db.refresh(contributor)
+    
+    return OAuthLoginResponse(
+        id=str(contributor.id),
+        email=contributor.email,
+        api_key=api_key,  # Show key for new users
+        tier=contributor.tier.value,
+        display_name=contributor.display_name,
+        is_new_user=True,
+        message="Welcome to ResonanceDB! Your API key has been generated. Save it securely!",
+    )

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Activity, BarChart2, FileUp, Home, LayoutDashboard, Settings, LogOut, Brain, Search, Menu, X } from "lucide-react"
 import { Button } from "@/components/atoms/button"
 import { cn } from "@/lib/utils"
@@ -14,6 +14,7 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
     const pathname = usePathname()
+    const router = useRouter()
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
     const { user, logout, isAuthenticated } = useAuth()
 
@@ -30,9 +31,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     // Filter nav items based on auth state
     const navItems = allNavItems.filter(item => !item.authRequired || isAuthenticated)
 
-    const handleLogout = () => {
-        logout()
+    const handleLogout = async () => {
+        await logout()
         setMobileMenuOpen(false)
+        router.push('/')
     }
 
     return (
@@ -66,23 +68,25 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     })}
                 </nav>
 
-                <div className="p-4 border-t border-white/5">
-                    <div className="flex items-center gap-3 px-2 mb-4">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500"></div>
-                        <div>
-                            <p className="text-sm font-medium text-white">{user?.email?.split("@")[0] || "Guest User"}</p>
-                            <p className="text-xs text-muted-foreground capitalize">{user?.tier || "Starter"} Tier</p>
+                {isAuthenticated && (
+                    <div className="p-4 border-t border-white/5">
+                        <div className="flex items-center gap-3 px-2 mb-4">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500"></div>
+                            <div>
+                                <p className="text-sm font-medium text-white">{user?.display_name || user?.email?.split("@")[0] || "User"}</p>
+                                <p className="text-xs text-muted-foreground capitalize">{user?.tier || "Starter"} Tier</p>
+                            </div>
                         </div>
+                        <Button
+                            variant="ghost"
+                            className="w-full justify-start text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                            onClick={handleLogout}
+                        >
+                            <LogOut className="mr-3 h-4 w-4" />
+                            Log Out
+                        </Button>
                     </div>
-                    <Button
-                        variant="ghost"
-                        className="w-full justify-start text-red-500 hover:text-red-400 hover:bg-red-500/10"
-                        onClick={handleLogout}
-                    >
-                        <LogOut className="mr-3 h-4 w-4" />
-                        Log Out
-                    </Button>
-                </div>
+                )}
             </aside>
 
             {/* Mobile Sidebar Overlay */}
@@ -128,23 +132,25 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     })}
                 </nav>
 
-                <div className="p-4 border-t border-white/5">
-                    <div className="flex items-center gap-3 px-2 mb-4">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500"></div>
-                        <div>
-                            <p className="text-sm font-medium text-white">{user?.email?.split("@")[0] || "Guest User"}</p>
-                            <p className="text-xs text-muted-foreground capitalize">{user?.tier || "Starter"} Tier</p>
+                {isAuthenticated && (
+                    <div className="p-4 border-t border-white/5">
+                        <div className="flex items-center gap-3 px-2 mb-4">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500"></div>
+                            <div>
+                                <p className="text-sm font-medium text-white">{user?.display_name || user?.email?.split("@")[0] || "User"}</p>
+                                <p className="text-xs text-muted-foreground capitalize">{user?.tier || "Starter"} Tier</p>
+                            </div>
                         </div>
+                        <Button
+                            variant="ghost"
+                            className="w-full justify-start text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                            onClick={handleLogout}
+                        >
+                            <LogOut className="mr-3 h-4 w-4" />
+                            Log Out
+                        </Button>
                     </div>
-                    <Button
-                        variant="ghost"
-                        className="w-full justify-start text-red-500 hover:text-red-400 hover:bg-red-500/10"
-                        onClick={handleLogout}
-                    >
-                        <LogOut className="mr-3 h-4 w-4" />
-                        Log Out
-                    </Button>
-                </div>
+                )}
             </aside>
 
             {/* Main Content */}

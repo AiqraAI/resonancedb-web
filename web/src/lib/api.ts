@@ -93,6 +93,21 @@ class ApiClient {
         return this.request<ContributorStats>("/api/v1/auth/me")
     }
 
+    async oauthLogin(email: string, name: string | null, provider: string): Promise<{
+        id: string
+        email: string
+        api_key: string | null
+        tier: string
+        display_name: string | null
+        is_new_user: boolean
+        message: string
+    }> {
+        return this.request("/api/v1/auth/oauth-login", {
+            method: "POST",
+            body: JSON.stringify({ email, name, provider }),
+        })
+    }
+
     // --- Contributor Endpoints ---
 
     async getMyStats(): Promise<ContributorStats> {
