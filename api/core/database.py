@@ -1,115 +1,199 @@
 """
-Async Database Configuration for ResonanceDB API
+Samples Router
 
-Uses SQLAlchemy 2.0 async engine with asyncpg driver for PostgreSQL.
+Handles vibration sample submission and retrieval.
 """
 
-import asyncio
-import uuid
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.types import TypeDecorator, CHAR
-from typing import AsyncGenerator
+from datetime import datetime
+from uuid import UUID
+from typing import Optional
+import numpy as np
+from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy import select, func
 
-from .config import settings
-
-
-# Portable UUID type that works with both SQLite and PostgreSQL
-class GUID(TypeDecorator):
-    """Platform-independent GUID type using CHAR(32) for storage."""
-    impl = CHAR
-    cache_ok = True
-
-    def load_dialect_impl(self, dialect):
-        return dialect.type_descriptor(CHAR(32))
-
-    def process_bind_param(self, value, dialect):
-        if value is not None:
-            return str(value).replace('-', '')
-        return value
-
-    def process_result_value(self, value, dialect):
-        if value is not None:
-            return uuid.UUID(value)
-        return value
-
-
-# Determine engine options based on database type
-is_sqlite = settings.DATABASE_URL.startswith("sqlite")
-
-# SQLite doesn't support pool_size settings
-engine_kwargs = {
-    "echo": settings.DEBUG,
-}
-
-if not is_sqlite:
-    # PostgreSQL-specific options
-    engine_kwargs.update({
-        "pool_pre_ping": True,
-        "pool_size": 10,
-        "max_overflow": 20,
-    })
-
-# Create async engine
-engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
-
-# Session factory
-async_session_maker = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
+from api.deps import DBSession, CurrentContributor
+from api.models.sample import Sample
+from api.schemas.sample import (
+    SampleCreate,
+    SampleResponse,
+    SampleDetail,
+    SampleListItem,
+    SampleListResponse,
 )
 
+# Import feature extraction from existing code
+import sys
+from pathlib import Path
+ROOT = Path(__file__).resolve().parent.parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-class Base(DeclarativeBase):
-    """Base class for all database models."""
-    pass
+from python.features import compute_feature_vector
+
+router = APIRouter(tags=["Samples"])
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+@router.post(
+    "",
+    response_model=SampleResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit a vibration sample",
+    description="Submit a new vibration sample to ResonanceDB.",
+)
+async def create_sample(
+    data: SampleCreate,
+    contributor: CurrentContributor,
+    db: DBSession,
+) -> SampleResponse:
     """
-    Dependency that provides an async database session.
+    Submit a new vibration sample.
     
-    Usage in FastAPI:
-        @app.get("/items")
-        async def get_items(db: AsyncSession = Depends(get_db)):
-            ...
+    The sample will be validated and features extracted automatically.
     """
-    async with async_session_maker() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
-
-
-async def init_db(max_retries: int = 5, retry_delay: float = 2.0) -> None:
-    """
-    Create all database tables. Call on application startup.
+    # Extract features using existing pipeline
+    vibration_array = np.array(data.vibration)
+    try:
+        features = compute_feature_vector(
+            vibration_array,
+            data.sample_rate_hz,
+            extra=False,
+        )
+        peak_freq = float(features[0])
+        energy = float(features[2])
+        validated = True
+        validation_errors = None
+    except Exception as e:
+        peak_freq = None
+        energy = None
+        validated = False
+        validation_errors = [str(e)]
     
-    Includes retry logic for when PostgreSQL is still starting.
-    """
-    for attempt in range(max_retries):
-        try:
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-            print("✅ Database initialized successfully")
-            return
-        except Exception as e:
-            if attempt < max_retries - 1:
-                print(f"⏳ Database not ready (attempt {attempt + 1}/{max_retries}): {e}")
-                await asyncio.sleep(retry_delay)
-            else:
-                print(f"❌ Failed to initialize database after {max_retries} attempts")
-                raise
+    # Create sample
+    sample = Sample(
+        contributor_id=contributor.id,
+        material=data.material.lower(),
+        vibration=data.vibration,
+        sample_rate_hz=data.sample_rate_hz,
+        excitation=data.excitation,
+        source=data.source.lower(),
+        temperature_c=data.temperature_c,
+        thickness_mm=data.thickness_mm,
+        load_g=data.load_g,
+        mounting=data.mounting,
+        device=data.device,
+        notes=data.notes,
+        validated=validated,
+        validation_errors=validation_errors,
+        peak_frequency_hz=peak_freq,
+        energy=energy,
+    )
+    
+    db.add(sample)
+    
+    # Update contributor stats
+    contributor.total_submissions += 1
+    if validated:
+        contributor.validated_submissions += 1
+        contributor.update_tier()
+    contributor.last_activity_at = datetime.utcnow()
+    
+    await db.flush()
+    await db.refresh(sample)
+    
+    return SampleResponse(
+        id=sample.id,
+        material=sample.material,
+        sample_rate_hz=sample.sample_rate_hz,
+        vibration_length=sample.vibration_length,
+        duration_seconds=sample.duration_seconds,
+        validated=sample.validated,
+        created_at=sample.created_at,
+    )
 
 
-async def close_db() -> None:
-    """Dispose of the engine. Call on application shutdown."""
-    await engine.dispose()
+@router.get(
+    "",
+    response_model=SampleListResponse,
+    summary="List samples",
+    description="Get a paginated list of samples with optional filters.",
+)
+async def list_samples(
+    db: DBSession,
+    material: Optional[str] = Query(None, description="Filter by material"),
+    source: Optional[str] = Query(None, description="Filter by source"),
+    validated: Optional[bool] = Query(None, description="Filter by validation status"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+) -> SampleListResponse:
+    """List samples with optional filtering and pagination."""
+    
+    # Build query
+    query = select(Sample)
+    
+    if material:
+        query = query.where(Sample.material == material.lower())
+    if source:
+        query = query.where(Sample.source == source.lower())
+    if validated is not None:
+        query = query.where(Sample.validated == validated)
+    
+    # Get total count
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+    
+    # Apply pagination
+    offset = (page - 1) * page_size
+    query = query.order_by(Sample.created_at.desc()).offset(offset).limit(page_size)
+    
+    result = await db.execute(query)
+    samples = result.scalars().all()
+    
+    items = [
+        SampleListItem(
+            id=s.id,
+            material=s.material,
+            sample_rate_hz=s.sample_rate_hz,
+            vibration_length=s.vibration_length,
+            duration_seconds=s.duration_seconds,
+            source=s.source,
+            device=s.device,
+            validated=s.validated,
+            created_at=s.created_at,
+        )
+        for s in samples
+    ]
+    
+    return SampleListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_next=(offset + len(items)) < total,
+    )
 
+
+@router.get(
+    "/{sample_id}",
+    response_model=SampleDetail,
+    summary="Get sample details",
+    description="Get full details of a sample including vibration data.",
+)
+async def get_sample(
+    sample_id: UUID,
+    db: DBSession,
+) -> SampleDetail:
+    """Get a sample by ID with full vibration data."""
+    
+    result = await db.execute(
+        select(Sample).where(Sample.id == sample_id)
+    )
+    sample = result.scalar_one_or_none()
+    
+    if sample is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sample not found",
+        )
+    
+    return SampleDetail.model_validate(sample)

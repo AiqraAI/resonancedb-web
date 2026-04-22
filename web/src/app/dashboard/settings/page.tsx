@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/atoms/button"
 import { Input } from "@/components/atoms/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/molecules/card"
@@ -15,6 +15,7 @@ export default function SettingsPage() {
     const [profile, setProfile] = useState<ContributorStats | null>(null)
     const [loading, setLoading] = useState(true)
     const [copied, setCopied] = useState(false)
+    const [currentKey, setCurrentKey] = useState<string | null>(null)
 
     // Regenerate state
     const [showRegenerateModal, setShowRegenerateModal] = useState(false)
@@ -22,11 +23,17 @@ export default function SettingsPage() {
     const [newApiKey, setNewApiKey] = useState<string | null>(null)
     const [regenerateError, setRegenerateError] = useState<string | null>(null)
 
-    // Get masked API key from storage
-    const storedKey = getStoredApiKey()
-    const maskedKey = storedKey
-        ? `${storedKey.substring(0, 12)}${"•".repeat(20)}${storedKey.slice(-4)}`
-        : "No API key stored"
+    // Sync currentKey from storage on mount
+    useEffect(() => {
+        setCurrentKey(getStoredApiKey())
+    }, [])
+
+    // Get masked API key from state
+    const maskedKey = useMemo(() => {
+        return currentKey
+            ? `${currentKey.substring(0, 12)}${"•".repeat(20)}${currentKey.slice(-4)}`
+            : "No API key stored"
+    }, [currentKey])
 
     useEffect(() => {
         async function fetchProfile() {
@@ -47,8 +54,8 @@ export default function SettingsPage() {
     }, [isAuthenticated])
 
     const handleCopy = () => {
-        if (storedKey) {
-            navigator.clipboard.writeText(storedKey)
+        if (currentKey) {
+            navigator.clipboard.writeText(currentKey)
             setCopied(true)
             setTimeout(() => setCopied(false), 2000)
         }
@@ -62,6 +69,7 @@ export default function SettingsPage() {
             const result = await api.regenerateKey()
             setNewApiKey(result.api_key)
             setStoredApiKey(result.api_key)
+            setCurrentKey(result.api_key) // Update state to trigger re-masking
             refreshUser()
         } catch (error) {
             setRegenerateError(error instanceof Error ? error.message : "Failed to regenerate key")

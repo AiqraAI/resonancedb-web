@@ -29,8 +29,8 @@ const handler = NextAuth({
         async session({ session, token }) {
             // Expose provider info in session
             if (session.user) {
-                (session.user as any).provider = token.provider
-                    (session.user as any).providerAccountId = token.providerAccountId
+                (session.user as any).provider = token.provider;
+                (session.user as any).providerAccountId = token.providerAccountId;
             }
             return session
         },

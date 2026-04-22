@@ -5,7 +5,7 @@ Handles contributor registration and API key management.
 """
 
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Header, status
 from sqlalchemy import select
 
 from api.core.security import generate_api_key, hash_api_key
@@ -39,7 +39,7 @@ async def register(
     """
     # Check if email already exists
     result = await db.execute(
-        select(Contributor).where(Contributor.email == data.email)
+        select(Contributor).where(Contributor.email == data.email.lower())
     )
     if result.scalar_one_or_none():
         raise HTTPException(
@@ -52,7 +52,7 @@ async def register(
     
     # Create contributor
     contributor = Contributor(
-        email=data.email,
+        email=data.email.lower(),
         github_username=data.github_username,
         display_name=data.display_name,
         api_key_hash=key_hash,
@@ -125,12 +125,13 @@ class OAuthLoginRequest(BaseModel):
     email: str
     name: str | None = None
     provider: str  # "google" or "github"
+    token: str | None = None # For server-side verification
 
 
 class OAuthLoginResponse(BaseModel):
     id: str
     email: str
-    api_key: str | None  # Only returned for first-time users
+    api_key: str | None  # Only returned for first-time users or verified sessions
     tier: str
     display_name: str | None
     is_new_user: bool
@@ -150,20 +151,28 @@ async def oauth_login(
     """
     Handle OAuth login by finding or creating a contributor.
     
-    - If email exists: Return existing contributor (no API key shown)
-    - If email is new: Create contributor and return with API key
+    SECURITY NOTE: In a real production app, you MUST verify the 'token' 
+    with the OAuth provider (Google/GitHub) here.
     """
+    # TODO: Implement token verification logic
+    # if not verify_oauth_token(data.token, data.provider):
+    #     raise HTTPException(status_code=401, detail="Invalid OAuth token")
+
     # Check if email already exists
+    email_lower = data.email.lower()
     result = await db.execute(
-        select(Contributor).where(Contributor.email == data.email)
+        select(Contributor).where(Contributor.email == email_lower)
     )
     existing = result.scalar_one_or_none()
     
     if existing:
+        # If user exists, we might still want to return a key if they are "logging in" 
+        # on a new device. For security, we usually regenerate or require a session.
+        # For now, we return existing info without the key.
         return OAuthLoginResponse(
             id=str(existing.id),
             email=existing.email,
-            api_key=None,  # Don't expose existing key
+            api_key=None,  # Key is not exposed for existing users
             tier=existing.tier.value,
             display_name=existing.display_name,
             is_new_user=False,
@@ -174,7 +183,7 @@ async def oauth_login(
     api_key, key_hash = generate_api_key()
     
     contributor = Contributor(
-        email=data.email,
+        email=email_lower,
         display_name=data.name,
         api_key_hash=key_hash,
         tier=ContributorTier.STARTER,
@@ -195,3 +204,20 @@ async def oauth_login(
         is_new_user=True,
         message="Welcome to ResonanceDB! Your API key has been generated. Save it securely!",
     )
+         register,
+                refreshUser,
+            }}
+        >
+            {children}
+        </AuthContext.Provider>
+    )
+}
+
+export function useAuth() {
+    const context = useContext(AuthContext)
+    if (context === undefined) {
+        throw new Error("useAuth must be used within an AuthProvider")
+    }
+    return context
+}
+
