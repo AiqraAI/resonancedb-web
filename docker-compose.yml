@@ -1,62 +1,93 @@
-version: '3.8'
-
-# =============================================================================
-# DEVELOPMENT ONLY - Do not use in production!
-# For production, use docker-compose.prod.yml
-# =============================================================================
-
 services:
-  db:
+  resonancedb-postgres:
     image: postgres:16-alpine
-    container_name: resonancedb-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: resonancedb
       POSTGRES_USER: resonance
-      POSTGRES_PASSWORD: resonance_dev
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U resonance -d resonancedb" ]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - internal-network
 
-  api:
-    build: .
-    container_name: resonancedb-api
-    ports:
-      - "8000:8000"
+  resonancedb-redis:
+    image: redis:alpine
+    restart: unless-stopped
+    command: [ "redis-server", "--appendonly", "yes" ]
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal-network
+
+  resonancedb-api:
+    image: resonancedb-api
+    restart: unless-stopped
     depends_on:
-      db:
+      resonancedb-postgres:
         condition: service_healthy
+      resonancedb-redis:
+        condition: service_started
     environment:
-      DATABASE_URL: postgresql+asyncpg://resonance:resonance_dev@db:5432/resonancedb
-      # DEV ONLY - This secret is for local development only!
-      API_KEY_SECRET: dev_secret_not_for_production_use_openssl_rand_hex_32
+      APP_NAME: ResonanceDB API
+      APP_VERSION: "1.0.0"
       DEBUG: "true"
-    volumes:
-      - .:/app
-      - ./models:/app/models:ro
-    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+      DB_PASSWORD: ${DB_PASSWORD}
+      DATABASE_URL: postgresql+asyncpg://resonance:${DB_PASSWORD}@resonancedb-postgres:5432/resonancedb
+      API_KEY_SECRET: ${API_KEY_SECRET}
+      REDIS_URL: redis://resonancedb-redis:6379/0
+      CORS_ORIGINS: '["http://localhost:3000","http://localhost:8000","https://resonancedb.aiqra.ai","https://www.resonancedb.aiqra.ai"]'
+    expose:
+      - "8000"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.resonancedb-api.rule=Host(`api.resonancedb.aiqra.ai`)
+      - traefik.http.routers.resonancedb-api.entrypoints=websecure
+      - traefik.http.routers.resonancedb-api.tls=true
+      - traefik.http.services.resonancedb-api.loadbalancer.server.port=8000
+    networks:
+      - internal-network
+      - traefik-proxy
 
-  web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-    container_name: resonancedb-web
-    ports:
-      - "3001:3000"
+  resonancedb-web:
+    image: resonancedb-web
+    restart: unless-stopped
     depends_on:
-      - api
+      resonancedb-api:
+        condition: service_started
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
-    volumes:
-      - ./web:/app
-      - /app/node_modules
-      - /app/.next
-    command: npm run dev
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: https://api.resonancedb.aiqra.ai
+      NEXTAUTH_URL: https://resonancedb.aiqra.ai
+      NEXTAUTH_SECRET: P12VDzsagKETy92jeLFcrANvftDpw+qaPico1CnnkrA=
+      GOOGLE_CLIENT_ID: 299055141864-r18vnumo1kcqkvo23rfe39nfit2amtuo.apps.googleusercontent.com
+      GOOGLE_CLIENT_SECRET: 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
+      GITHUB_CLIENT_ID: Ov23li9blx3Gm96RjRoi
+      GITHUB_CLIENT_SECRET: 0a4c9961885128ee7d23da112286bb7c184fe014
+    expose:
+      - "3000"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.resonancedb-web.rule=Host(`resonancedb.aiqra.ai`)
+      - traefik.http.routers.resonancedb-web.entrypoints=websecure
+      - traefik.http.routers.resonancedb-web.tls=true
+      - traefik.http.services.resonancedb-web.loadbalancer.server.port=3000
+    networks:
+      - internal-network
+      - traefik-proxy
 
 volumes:
   postgres_data:
+  redis_data:
+
+
+networks:
+  internal-network:
+    driver: bridge
+  traefik-proxy:
+    external: true
