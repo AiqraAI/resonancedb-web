@@ -18,8 +18,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={cn(inter.className, "bg-background text-foreground antialiased")}>
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body 
+        className={cn(inter.className, "bg-background text-foreground antialiased")}
+        suppressHydrationWarning
+      >
         <NextAuthProvider>
           <AuthProvider>{children}</AuthProvider>
         </NextAuthProvider>
@@ -27,4 +30,3 @@ export default function RootLayout({
     </html>
   );
 }
-

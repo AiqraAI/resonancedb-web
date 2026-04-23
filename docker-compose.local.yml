@@ -1,0 +1,75 @@
+services:
+  resonancedb-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: resonancedb
+      POSTGRES_USER: resonance
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-resonance_dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U resonance -d resonancedb" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - resonance-network
+
+  resonancedb-redis:
+    image: redis:alpine
+    restart: unless-stopped
+    command: [ "redis-server", "--appendonly", "yes" ]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - resonance-network
+
+  resonancedb-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      resonancedb-postgres:
+        condition: service_healthy
+      resonancedb-redis:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://resonance:${DB_PASSWORD:-resonance_dev}@resonancedb-postgres:5432/resonancedb
+      - REDIS_URL=redis://resonancedb-redis:6379/0
+    ports:
+      - "8000:8000"
+    networks:
+      - resonance-network
+
+  resonancedb-web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      resonancedb-api:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+    ports:
+      - "3000:3000"
+    networks:
+      - resonance-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  resonance-network:
+    driver: bridge

@@ -204,20 +204,4 @@ async def oauth_login(
         is_new_user=True,
         message="Welcome to ResonanceDB! Your API key has been generated. Save it securely!",
     )
-         register,
-                refreshUser,
-            }}
-        >
-            {children}
-        </AuthContext.Provider>
-    )
-}
-
-export function useAuth() {
-    const context = useContext(AuthContext)
-    if (context === undefined) {
-        throw new Error("useAuth must be used within an AuthProvider")
-    }
-    return context
-}
 
