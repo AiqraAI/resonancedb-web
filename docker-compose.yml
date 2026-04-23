@@ -15,9 +15,8 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      internal-network:
-        ipv4_address: 172.20.0.10
-      traefik-proxy:
+      - internal-network
+      - traefik-proxy
 
   resonancedb-redis:
     image: redis:alpine
@@ -27,9 +26,8 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      internal-network:
-        ipv4_address: 172.20.0.11
-      traefik-proxy:
+      - internal-network
+      - traefik-proxy
 
   resonancedb-api:
     build:
@@ -47,10 +45,10 @@ services:
       APP_VERSION: "1.0.0"
       DEBUG: "true"
       DB_PASSWORD: ${DB_PASSWORD}
-      # Connecting via Static IP to bypass DNS issues
-      DATABASE_URL: postgresql+asyncpg://resonance:${DB_PASSWORD}@172.20.0.10:5432/resonancedb
+      # Explicitly disabling SSL to avoid DNS lookup issues during handshake
+      DATABASE_URL: postgresql+asyncpg://resonance:${DB_PASSWORD}@resonancedb-postgres:5432/resonancedb?ssl=disable
       API_KEY_SECRET: ${API_KEY_SECRET}
-      REDIS_URL: redis://172.20.0.11:6379/0
+      REDIS_URL: redis://resonancedb-redis:6379/0
       CORS_ORIGINS: '["http://localhost:3000","http://localhost:8000","https://resonancedb.aiqra.ai","https://www.resonancedb.aiqra.ai"]'
     expose:
       - "8000"
@@ -102,8 +100,5 @@ volumes:
 networks:
   internal-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
   traefik-proxy:
     external: true
