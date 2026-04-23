@@ -60,7 +60,7 @@ class GUID(TypeDecorator):
 
 
 # Create async engine
-# For SQLite, we need to handle the fact that it's a file
+print(f"📡 Connecting to database at: {settings.DATABASE_URL.split('@')[-1]}")
 connect_args = {}
 if settings.DATABASE_URL.startswith("sqlite"):
     connect_args["check_same_thread"] = False
