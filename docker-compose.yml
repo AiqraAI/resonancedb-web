@@ -1,7 +1,7 @@
 services:
   resonancedb-postgres:
     image: postgres:16-alpine
-    hostname: resonancedb-postgres
+    container_name: resonancedb-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: resonancedb
@@ -20,6 +20,7 @@ services:
 
   resonancedb-redis:
     image: redis:alpine
+    container_name: resonancedb-redis
     restart: unless-stopped
     command: [ "redis-server", "--appendonly", "yes" ]
     volumes:
@@ -39,6 +40,9 @@ services:
         condition: service_healthy
       resonancedb-redis:
         condition: service_started
+    links:
+      - resonancedb-postgres
+      - resonancedb-redis
     environment:
       APP_NAME: ResonanceDB API
       APP_VERSION: "1.0.0"
@@ -69,6 +73,8 @@ services:
     depends_on:
       resonancedb-api:
         condition: service_started
+    links:
+      - resonancedb-api
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: https://api.resonancedb.aiqra.ai
