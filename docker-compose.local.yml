@@ -1,75 +1,92 @@
+# Local Development Docker Compose
+# Use this file for local development with Docker Desktop
+# docker-compose -f docker-compose.local.yml up -d
+
 services:
   resonancedb-postgres:
     image: postgres:16-alpine
+    container_name: resonancedb-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: resonancedb
       POSTGRES_USER: resonance
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-resonance_dev}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-resonance_local_dev}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U resonance -d resonancedb" ]
+      test: ["CMD-SHELL", "pg_isready -U resonance -d resonancedb"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - resonance-network
+      - internal-network
 
   resonancedb-redis:
     image: redis:alpine
+    container_name: resonancedb-redis
     restart: unless-stopped
-    command: [ "redis-server", "--appendonly", "yes" ]
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
-      - resonance-network
+      - internal-network
 
   resonancedb-api:
     build:
       context: .
       dockerfile: Dockerfile
+    image: resonancedb-api
     restart: unless-stopped
     depends_on:
       resonancedb-postgres:
         condition: service_healthy
       resonancedb-redis:
         condition: service_started
-    env_file:
-      - .env
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://resonance:${DB_PASSWORD:-resonance_dev}@resonancedb-postgres:5432/resonancedb
-      - REDIS_URL=redis://resonancedb-redis:6379/0
     ports:
       - "8000:8000"
+    environment:
+      APP_NAME: ResonanceDB API
+      APP_VERSION: "1.0.0"
+      DEBUG: "true"
+      DB_PASSWORD: ${DB_PASSWORD:-resonance_local_dev}
+      DATABASE_URL: postgresql+asyncpg://resonance:${DB_PASSWORD:-resonance_local_dev}@resonancedb-postgres:5432/resonancedb
+      API_KEY_SECRET: ${API_KEY_SECRET:-local_dev_secret_change_in_production}
+      REDIS_URL: redis://resonancedb-redis:6379/0
+      CORS_ORIGINS: '["http://localhost:3000","http://localhost:3001","http://localhost:8000"]'
     networks:
-      - resonance-network
+      - internal-network
 
   resonancedb-web:
     build:
       context: ./web
       dockerfile: Dockerfile
+    image: resonancedb-web
     restart: unless-stopped
     depends_on:
       resonancedb-api:
         condition: service_started
-    env_file:
-      - .env
-    environment:
-      - NODE_ENV=development
     ports:
       - "3000:3000"
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-local_nextauth_secret}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
     networks:
-      - resonance-network
+      - internal-network
 
 volumes:
   postgres_data:
   redis_data:
 
 networks:
-  resonance-network:
+  internal-network:
     driver: bridge

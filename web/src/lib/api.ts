@@ -90,7 +90,7 @@ class ApiClient {
     }
 
     async getProfile(): Promise<ContributorStats> {
-        return this.request<ContributorStats>("/api/v1/auth/me")
+        return this.request<ContributorStats>("/api/v1/contributors/me/stats")
     }
 
     async oauthLogin(email: string, name: string | null, provider: string): Promise<{

@@ -9,6 +9,9 @@ __pycache__/
 .env.local
 .env.production
 
+# Local Docker Compose (not tracked to avoid conflicts with production)
+docker-compose.local.yml
+
 # Build
 .next/
 out/

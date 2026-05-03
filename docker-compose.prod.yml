@@ -1,0 +1,135 @@
+# Production Docker Compose with Traefik and SSL
+# Use this file for production deployments
+# docker-compose -f docker-compose.prod.yml up -d
+
+services:
+  traefik:
+    image: traefik:v2.10
+    container_name: resonancedb-traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.caserver=https://acme-v02.api.letsencrypt.org/directory"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Traefik dashboard (remove in production if not needed)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    networks:
+      - traefik-proxy
+    labels:
+      - "traefik.enable=true"
+
+  resonancedb-postgres:
+    image: postgres:16-alpine
+    container_name: resonancedb-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: resonancedb
+      POSTGRES_USER: ${POSTGRES_USER:-resonance_prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-resonance_prod} -d resonancedb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal-network
+      - traefik-proxy
+
+  resonancedb-redis:
+    image: redis:alpine
+    container_name: resonancedb-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-}"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal-network
+      - traefik-proxy
+
+  resonancedb-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: resonancedb-api
+    restart: unless-stopped
+    depends_on:
+      resonancedb-postgres:
+        condition: service_healthy
+      resonancedb-redis:
+        condition: service_started
+    environment:
+      APP_NAME: ResonanceDB API
+      APP_VERSION: "1.0.0"
+      DEBUG: "false"
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-resonance_prod}:${POSTGRES_PASSWORD}@resonancedb-postgres:5432/resonancedb
+      API_KEY_SECRET: ${API_KEY_SECRET}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@resonancedb-redis:6379/0
+      CORS_ORIGINS: '["https://resonancedb.aiqra.ai","https://www.resonancedb.aiqra.ai","https://api.resonancedb.aiqra.ai"]'
+    expose:
+      - "8000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.resonancedb-api.rule=Host(`api.resonancedb.aiqra.ai`)"
+      - "traefik.http.routers.resonancedb-api.entrypoints=websecure"
+      - "traefik.http.routers.resonancedb-api.tls=true"
+      - "traefik.http.routers.resonancedb-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.resonancedb-api.loadbalancer.server.port=8000"
+    networks:
+      - internal-network
+      - traefik-proxy
+
+  resonancedb-web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: resonancedb-web
+    restart: unless-stopped
+    depends_on:
+      resonancedb-api:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: https://api.resonancedb.aiqra.ai
+      NEXTAUTH_URL: https://resonancedb.aiqra.ai
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+    expose:
+      - "3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.resonancedb-web.rule=Host(`resonancedb.aiqra.ai`)"
+      - "traefik.http.routers.resonancedb-web.entrypoints=websecure"
+      - "traefik.http.routers.resonancedb-web.tls=true"
+      - "traefik.http.routers.resonancedb-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.resonancedb-web.loadbalancer.server.port=3000"
+    networks:
+      - internal-network
+      - traefik-proxy
+
+volumes:
+  postgres_data:
+  redis_data:
+  traefik_letsencrypt:
+
+networks:
+  internal-network:
+    driver: bridge
+  traefik-proxy:
+    external: true

@@ -93,9 +93,21 @@ def compute_feature_vector(signal: np.ndarray, sample_rate_hz: float, *, detrend
             base.append(bandwidth)
 
         if 'zcr' in requested:
+            # Proper zero-crossing rate calculation
+            # Count zero crossings including when signal passes through zero
+            # A crossing occurs when signal goes from positive to negative or vice versa
             signs = np.sign(x)
-            signs[signs == 0] = 1  # treat zeros as no crossing
-            zc = np.sum(signs[1:] != signs[:-1])
+            # Replace zeros with previous non-zero sign (hold last value)
+            # This handles the case where signal exactly hits zero
+            for i in range(1, len(signs)):
+                if signs[i] == 0:
+                    signs[i] = signs[i - 1]
+            # If first value is zero, use sign of second
+            if signs[0] == 0 and len(signs) > 1:
+                signs[0] = signs[1]
+            # Count sign changes (+1 to -1 or -1 to +1)
+            diff = np.diff(signs)
+            zc = np.sum(np.abs(diff) == 2)
             zcr = float(zc / len(x) * sample_rate_hz)
             base.append(zcr)
 

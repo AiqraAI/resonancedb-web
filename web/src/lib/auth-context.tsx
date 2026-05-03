@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react"
 import { useSession, signOut } from "next-auth/react"
 import { api, getStoredApiKey, setStoredApiKey, clearStoredApiKey } from "@/lib/api"
-import type { ContributorStats, ContributorWithKey } from "@/lib/types"
+import type { ContributorStats, ContributorTier, ContributorWithKey } from "@/lib/types"
 
 interface AuthContextType {
     isAuthenticated: boolean
@@ -80,11 +80,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         id: result.id,
                         email: result.email,
                         display_name: result.display_name || undefined,
-                        tier: result.tier as "starter" | "bronze" | "silver" | "gold" | "platinum",
+                        tier: result.tier as ContributorTier,
                         total_submissions: 0,
                         validated_submissions: 0,
                         rate_limit_per_hour: 100,
-                        progress_to_next_tier: { current: 0, required: 50, next_tier: "bronze" },
+                        progress_to_next_tier: { current: 0, required: 50, next_tier: "BRONZE" },
                         created_at: new Date().toISOString(),
                     })
                     setIsLoading(false)

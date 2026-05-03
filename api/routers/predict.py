@@ -7,9 +7,11 @@ Handles material prediction using trained ML models.
 import numpy as np
 import joblib
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Request
+from slowapi import Limiter
 
 from api.core.config import settings
+from api.core.rate_limit import limiter
 from api.deps import CurrentContributor
 from api.schemas.predict import PredictRequest, PredictResponse, ModelInfo
 
@@ -58,7 +60,9 @@ def load_model(model_path: str = None):
     summary="Predict material from vibration",
     description="Submit vibration data and get a material classification prediction.",
 )
+@limiter.limit("20/hour")  # Predictions are computationally expensive
 async def predict(
+    request: Request,
     data: PredictRequest,
     contributor: CurrentContributor,
 ) -> PredictResponse:

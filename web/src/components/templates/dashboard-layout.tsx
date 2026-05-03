@@ -74,7 +74,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500"></div>
                             <div>
                                 <p className="text-sm font-medium text-white">{user?.display_name || user?.email?.split("@")[0] || "User"}</p>
-                                <p className="text-xs text-muted-foreground capitalize">{user?.tier || "Starter"} Tier</p>
+                                <p className="text-xs text-muted-foreground capitalize">{user?.tier || "STARTER"} Tier</p>
                             </div>
                         </div>
                         <Button
@@ -138,7 +138,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500"></div>
                             <div>
                                 <p className="text-sm font-medium text-white">{user?.display_name || user?.email?.split("@")[0] || "User"}</p>
-                                <p className="text-xs text-muted-foreground capitalize">{user?.tier || "Starter"} Tier</p>
+                                <p className="text-xs text-muted-foreground capitalize">{user?.tier || "STARTER"} Tier</p>
                             </div>
                         </div>
                         <Button

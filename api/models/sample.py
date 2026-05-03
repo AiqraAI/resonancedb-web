@@ -132,9 +132,11 @@ class Sample(Base):
     @property
     def duration_seconds(self) -> float:
         """Calculate the duration of the sample in seconds."""
-        if self.sample_rate_hz > 0:
-            return self.vibration_length / self.sample_rate_hz
-        return 0.0
+        if self.sample_rate_hz is None or self.sample_rate_hz <= 0:
+            return 0.0
+        if self.vibration_length == 0:
+            return 0.0
+        return self.vibration_length / self.sample_rate_hz
 
 
 # Import for type hints

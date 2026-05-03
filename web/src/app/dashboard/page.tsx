@@ -55,11 +55,10 @@ export default function DashboardPage() {
     }, [isAuthenticated, authLoading])
 
     const tierColorMap: Record<string, string> = {
-        starter: "text-zinc-400",
-        bronze: "text-amber-600",
-        silver: "text-slate-300",
-        gold: "text-yellow-400",
-        platinum: "text-purple-400",
+        STARTER: "text-zinc-400",
+        BRONZE: "text-amber-600",
+        SILVER: "text-slate-300",
+        GOLD: "text-yellow-400",
     }
 
     // Helper to format time ago

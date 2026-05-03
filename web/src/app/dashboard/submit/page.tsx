@@ -61,13 +61,18 @@ export default function SubmitPage() {
         setIsSubmitting(true)
         setError(null)
 
+        // Validate source field
+        const validSources = ["real", "simulation", "phone_sensor"]
+        const rawSource = parsedJson.source || "real"
+        const validatedSource = validSources.includes(rawSource) ? rawSource : "real"
+
         try {
             const payload: SampleCreate = {
                 material: material || parsedJson.material || "unknown",
                 vibration: parsedJson.vibration,
                 sample_rate_hz: Number(sampleRate) || parsedJson.sample_rate_hz || 100,
                 excitation: excitation || parsedJson.excitation || "manual_tap",
-                source: parsedJson.source || "real",
+                source: validatedSource,
                 device: device || parsedJson.device,
             }
 

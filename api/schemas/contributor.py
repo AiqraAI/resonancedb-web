@@ -13,17 +13,29 @@ from api.models.tier import ContributorTier
 
 class ContributorCreate(BaseModel):
     """Schema for registering a new contributor."""
-    
+
     email: EmailStr = Field(..., description="Email address (used as unique identifier)")
     github_username: str | None = Field(None, description="GitHub username for attribution")
     display_name: str | None = Field(None, max_length=100, description="Display name")
 
 
-class ContributorUpdate(BaseModel):
-    """Schema for updating contributor profile."""
-    
-    github_username: str | None = Field(None, description="GitHub username")
-    display_name: str | None = Field(None, max_length=100, description="Display name")
+# --- OAuth Schemas ---
+
+class OAuthLoginRequest(BaseModel):
+    email: str
+    name: str | None = None
+    provider: str  # "google" or "github"
+    token: str | None = None  # For server-side verification
+
+
+class OAuthLoginResponse(BaseModel):
+    id: str
+    email: str
+    api_key: str | None  # Only returned for first-time users or verified sessions
+    tier: str
+    display_name: str | None
+    is_new_user: bool
+    message: str
 
 
 # --- Response Schemas ---
@@ -59,9 +71,10 @@ class ContributorWithKey(BaseModel):
 
 class ContributorStats(BaseModel):
     """Detailed stats for a contributor."""
-    
+
     id: UUID
     email: EmailStr
+    display_name: str | None = None
     tier: ContributorTier
     total_submissions: int
     validated_submissions: int

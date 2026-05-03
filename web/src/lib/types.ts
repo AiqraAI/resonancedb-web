@@ -1,6 +1,6 @@
 // Types matching the Python Pydantic schemas
 
-export type ContributorTier = "starter" | "bronze" | "silver" | "gold" | "platinum"
+export type ContributorTier = "STARTER" | "BRONZE" | "SILVER" | "GOLD"
 
 // --- Contributor Types ---
 

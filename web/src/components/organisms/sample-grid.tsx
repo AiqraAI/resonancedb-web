@@ -56,18 +56,25 @@ export function SampleGrid() {
     }
 
     const handlePlay = async (id: string) => {
+        let audioCtx: AudioContext | null = null
+
         try {
             setPlayingId(id)
             const sample = await api.getSample(id)
 
             if (!sample.vibration || sample.vibration.length === 0) {
                 console.warn("No vibration data to play")
+                setPlayingId(null)
                 return
             }
 
             // Simple sonification
             const AudioContext = window.AudioContext || (window as any).webkitAudioContext
-            const audioCtx = new AudioContext()
+            if (!AudioContext) {
+                throw new Error("AudioContext not supported in this browser")
+            }
+
+            audioCtx = new AudioContext()
 
             // Normalize data to -1..1
             const maxVal = Math.max(...sample.vibration.map(Math.abs)) || 1
@@ -89,12 +96,17 @@ export function SampleGrid() {
 
             source.onended = () => {
                 setPlayingId(null)
-                audioCtx.close()
+                if (audioCtx) {
+                    audioCtx.close().catch(console.error)
+                }
             }
 
         } catch (error) {
             console.error("Playback failed:", error)
             setPlayingId(null)
+            if (audioCtx) {
+                audioCtx.close().catch(console.error)
+            }
         }
     }
 
@@ -124,7 +136,7 @@ export function SampleGrid() {
                             {/* Waveform visualization placeholder */}
                             <div className="absolute inset-0 flex items-center justify-center">
                                 <div className="w-full h-1 bg-primary/20 group-hover:bg-primary/50 transition-colors"></div>
-                                <div className="absolute w-full h-full opacity-30 bg-[url('/waveform-pattern.svg')]"></div>
+                                <div className="absolute w-full h-full opacity-20 bg-gradient-to-r from-primary/30 to-transparent"></div>
                             </div>
                             <Badge variant="secondary" className="absolute top-2 right-2 bg-black/50 backdrop-blur-md border-white/10 text-xs">
                                 {sample.duration_seconds.toFixed(1)}s

@@ -8,9 +8,10 @@ from datetime import datetime
 from uuid import UUID
 from typing import Optional
 import numpy as np
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status, Request
 from sqlalchemy import select, func
 
+from api.core.rate_limit import limiter
 from api.deps import DBSession, CurrentContributor
 from api.models.sample import Sample
 from api.schemas.sample import (
@@ -29,8 +30,44 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from python.features import compute_feature_vector
+import numpy as np
 
 router = APIRouter(tags=["Samples"])
+
+
+def validate_vibration_data(vibration: list[float]) -> list[str]:
+    """
+    Validate vibration data quality.
+
+    Returns list of validation errors (empty if valid).
+    """
+    errors = []
+    arr = np.array(vibration)
+
+    # Check for NaN or Infinity
+    if np.any(np.isnan(arr)):
+        errors.append("Vibration data contains NaN values")
+
+    if np.any(np.isinf(arr)):
+        errors.append("Vibration data contains Infinity values")
+
+    # Check for all-zeros (no signal)
+    if np.all(arr == 0):
+        errors.append("Vibration data is all zeros (no signal)")
+
+    # Check for constant signal (no variation)
+    if np.std(arr) == 0:
+        errors.append("Vibration data is constant (no variation)")
+
+    # Check for extremely small values (likely noise floor or error)
+    if np.all(np.abs(arr) < 1e-10):
+        errors.append("Vibration data values are extremely small (possible error)")
+
+    # Check for suspiciously large values
+    if np.any(np.abs(arr) > 1e6):
+        errors.append("Vibration data contains suspiciously large values")
+
+    return errors
 
 
 @router.post(
@@ -40,18 +77,24 @@ router = APIRouter(tags=["Samples"])
     summary="Submit a vibration sample",
     description="Submit a new vibration sample to ResonanceDB.",
 )
+@limiter.limit("50/hour")  # Limit sample submissions to prevent abuse
 async def create_sample(
+    request: Request,
     data: SampleCreate,
     contributor: CurrentContributor,
     db: DBSession,
 ) -> SampleResponse:
     """
     Submit a new vibration sample.
-    
+
     The sample will be validated and features extracted automatically.
     """
-    # Extract features using existing pipeline
+    # Validate vibration data quality first
+    validation_errors = validate_vibration_data(data.vibration)
+
     vibration_array = np.array(data.vibration)
+
+    # Extract features using existing pipeline
     try:
         features = compute_feature_vector(
             vibration_array,
@@ -60,13 +103,20 @@ async def create_sample(
         )
         peak_freq = float(features[0])
         energy = float(features[2])
-        validated = True
-        validation_errors = None
+
+        # Sample is validated only if quality checks pass and feature extraction succeeds
+        validated = len(validation_errors) == 0
+        if validated:
+            validation_errors = None
+
     except Exception as e:
         peak_freq = None
         energy = None
         validated = False
-        validation_errors = [str(e)]
+        if validation_errors:
+            validation_errors.append(str(e))
+        else:
+            validation_errors = [str(e)]
     
     # Create sample
     sample = Sample(
@@ -117,7 +167,9 @@ async def create_sample(
     summary="List samples",
     description="Get a paginated list of samples with optional filters.",
 )
+@limiter.limit("100/hour")  # Limit read operations
 async def list_samples(
+    request: Request,
     db: DBSession,
     material: Optional[str] = Query(None, description="Filter by material"),
     source: Optional[str] = Query(None, description="Filter by source"),
@@ -179,7 +231,9 @@ async def list_samples(
     summary="Get sample details",
     description="Get full details of a sample including vibration data.",
 )
+@limiter.limit("100/hour")  # Limit read operations
 async def get_sample(
+    request: Request,
     sample_id: UUID,
     db: DBSession,
 ) -> SampleDetail:

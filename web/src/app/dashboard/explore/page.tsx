@@ -1,11 +1,10 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { SearchInput } from "@/components/molecules/search-input"
 import { Button } from "@/components/atoms/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/molecules/card"
 import { Badge } from "@/components/atoms/badge"
-import { Filter, Activity, Loader2, Search, X } from "lucide-react"
+import { Activity, Loader2, Search, X } from "lucide-react"
 import { api } from "@/lib/api"
 import type { SampleListItem } from "@/lib/types"
 import { SampleDetailModal } from "@/components/organisms/sample-detail-modal"

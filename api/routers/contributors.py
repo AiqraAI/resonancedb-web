@@ -5,9 +5,10 @@ Handles contributor stats and leaderboard.
 """
 
 from datetime import datetime
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from sqlalchemy import select, func
 
+from api.core.rate_limit import limiter
 from api.deps import DBSession, CurrentContributor
 from api.models.contributor import Contributor
 from api.schemas.contributor import (
@@ -25,7 +26,9 @@ router = APIRouter(tags=["Contributors"])
     summary="Get your detailed stats",
     description="Get your submission statistics, tier progress, and rate limits.",
 )
+@limiter.limit("100/hour")
 async def get_my_stats(
+    request: Request,
     contributor: CurrentContributor,
 ) -> ContributorStats:
     """Get detailed stats for the authenticated contributor."""
@@ -33,6 +36,7 @@ async def get_my_stats(
     return ContributorStats(
         id=contributor.id,
         email=contributor.email,
+        display_name=contributor.display_name,
         tier=contributor.tier,
         total_submissions=contributor.total_submissions,
         validated_submissions=contributor.validated_submissions,
@@ -49,7 +53,9 @@ async def get_my_stats(
     summary="Get contributor leaderboard",
     description="Get the top contributors ranked by validated submissions.",
 )
+@limiter.limit("50/hour")
 async def get_leaderboard(
+    request: Request,
     db: DBSession,
     limit: int = Query(20, ge=1, le=100, description="Number of entries to return"),
 ) -> LeaderboardResponse:

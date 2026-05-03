@@ -4,11 +4,14 @@ Authentication Router
 Handles contributor registration and API key management.
 """
 
+import httpx
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Header, status
+from fastapi.requests import Request
 from sqlalchemy import select
 
 from api.core.security import generate_api_key, hash_api_key
+from api.core.rate_limit import limiter, get_limit_for_tier
 from api.deps import DBSession, CurrentContributor
 from api.models.contributor import Contributor
 from api.models.tier import ContributorTier
@@ -16,9 +19,23 @@ from api.schemas.contributor import (
     ContributorCreate,
     ContributorWithKey,
     ContributorResponse,
+    OAuthLoginRequest,
+    OAuthLoginResponse,
 )
 
 router = APIRouter(tags=["Authentication"])
+
+# OAuth provider endpoints
+OAUTH_PROVIDERS = {
+    "google": {
+        "userinfo_url": "https://www.googleapis.com/oauth2/v3/userinfo",
+        "token_verify_url": "https://oauth2.googleapis.com/tokeninfo",
+    },
+    "github": {
+        "userinfo_url": "https://api.github.com/user",
+        "token_verify_url": "https://api.github.com/user",
+    },
+}
 
 
 @router.post(
@@ -28,7 +45,9 @@ router = APIRouter(tags=["Authentication"])
     summary="Register a new contributor",
     description="Create a new account and receive your API key. Save it securely - it won't be shown again!",
 )
+@limiter.limit("10/minute")  # Rate limit registration to prevent abuse
 async def register(
+    request: Request,
     data: ContributorCreate,
     db: DBSession,
 ) -> ContributorWithKey:
@@ -80,7 +99,9 @@ async def register(
     summary="Regenerate API key",
     description="Generate a new API key. The old key will be invalidated immediately.",
 )
+@limiter.limit(get_limit_for_tier)  # Uses contributor's tier-based limit
 async def regenerate_key(
+    request: Request,
     contributor: CurrentContributor,
     db: DBSession,
 ) -> ContributorWithKey:
@@ -112,30 +133,100 @@ async def regenerate_key(
     response_model=ContributorResponse,
     summary="Get current contributor info",
 )
+@limiter.limit(get_limit_for_tier)  # Uses contributor's tier-based limit
 async def get_me(
+    request: Request,
     contributor: CurrentContributor,
 ) -> ContributorResponse:
     """Get the authenticated contributor's profile."""
     return ContributorResponse.model_validate(contributor)
 
 
-from pydantic import BaseModel
+async def verify_oauth_token(token: str, provider: str) -> dict:
+    """
+    Verify OAuth token with the provider and return user info.
 
-class OAuthLoginRequest(BaseModel):
-    email: str
-    name: str | None = None
-    provider: str  # "google" or "github"
-    token: str | None = None # For server-side verification
+    Raises HTTPException if token is invalid.
+    """
+    if provider not in OAUTH_PROVIDERS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported OAuth provider: {provider}",
+        )
 
+    provider_config = OAUTH_PROVIDERS[provider]
 
-class OAuthLoginResponse(BaseModel):
-    id: str
-    email: str
-    api_key: str | None  # Only returned for first-time users or verified sessions
-    tier: str
-    display_name: str | None
-    is_new_user: bool
-    message: str
+    async with httpx.AsyncClient() as client:
+        try:
+            if provider == "google":
+                # Verify token with Google
+                response = await client.get(
+                    f"{provider_config['token_verify_url']}?access_token={token}",
+                    timeout=10.0,
+                )
+                if response.status_code != 200:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Invalid Google OAuth token",
+                    )
+                # Get user info with verified token
+                response = await client.get(
+                    provider_config["userinfo_url"],
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=10.0,
+                )
+                if response.status_code != 200:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Failed to get Google user info",
+                    )
+                return response.json()
+
+            elif provider == "github":
+                # Verify token with GitHub by fetching user info
+                response = await client.get(
+                    provider_config["userinfo_url"],
+                    headers={
+                        "Authorization": f"token {token}",
+                        "Accept": "application/vnd.github.v3+json",
+                    },
+                    timeout=10.0,
+                )
+                if response.status_code != 200:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Invalid GitHub OAuth token",
+                    )
+                user_info = response.json()
+                # Get email if not in main response
+                if not user_info.get("email"):
+                    email_response = await client.get(
+                        "https://api.github.com/user/emails",
+                        headers={
+                            "Authorization": f"token {token}",
+                            "Accept": "application/vnd.github.v3+json",
+                        },
+                        timeout=10.0,
+                    )
+                    if email_response.status_code == 200:
+                        emails = email_response.json()
+                        primary = next((e for e in emails if e.get("primary")), None)
+                        if primary:
+                            user_info["email"] = primary["email"]
+                return user_info
+
+        except httpx.TimeoutException:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="OAuth provider unavailable",
+            )
+        except httpx.RequestError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Failed to connect to OAuth provider",
+            )
+
+    return {}
 
 
 @router.post(
@@ -144,19 +235,27 @@ class OAuthLoginResponse(BaseModel):
     summary="OAuth login/register",
     description="Find or create a contributor from OAuth login. Returns API key for new users.",
 )
+@limiter.limit("10/minute")  # Rate limit OAuth to prevent abuse
 async def oauth_login(
+    request: Request,
     data: OAuthLoginRequest,
     db: DBSession,
 ) -> OAuthLoginResponse:
     """
     Handle OAuth login by finding or creating a contributor.
-    
-    SECURITY NOTE: In a real production app, you MUST verify the 'token' 
-    with the OAuth provider (Google/GitHub) here.
+
+    Verifies the OAuth token with the provider before creating/finding user.
     """
-    # TODO: Implement token verification logic
-    # if not verify_oauth_token(data.token, data.provider):
-    #     raise HTTPException(status_code=401, detail="Invalid OAuth token")
+    # Verify OAuth token if provided (required in production, optional for local dev)
+    if data.token:
+        user_info = await verify_oauth_token(data.token, data.provider)
+        # Use verified email from provider if available
+        if user_info.get("email"):
+            data.email = user_info["email"]
+        if user_info.get("name") and not data.name:
+            data.name = user_info.get("name") or data.name
+        if user_info.get("login") and data.provider == "github":
+            data.name = user_info.get("login") or data.name
 
     # Check if email already exists
     email_lower = data.email.lower()

@@ -58,8 +58,8 @@ export default function LoginPage() {
                 throw new Error("API Key is required")
             }
 
-            if (!apiKey.startsWith("rdb_")) {
-                throw new Error("Invalid API Key format. Keys start with 'rdb_'")
+            if (!apiKey.startsWith("rdb_live_")) {
+                throw new Error("Invalid API Key format. Keys start with 'rdb_live_'")
             }
 
             login(apiKey)

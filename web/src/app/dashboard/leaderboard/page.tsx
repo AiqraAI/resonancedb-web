@@ -28,11 +28,10 @@ export default function LeaderboardPage() {
     }, [])
 
     const tierColorMap: Record<string, string> = {
-        starter: "bg-zinc-700",
-        bronze: "bg-amber-700",
-        silver: "bg-slate-400",
-        gold: "bg-yellow-500",
-        platinum: "bg-purple-500",
+        STARTER: "bg-zinc-700",
+        BRONZE: "bg-amber-700",
+        SILVER: "bg-slate-400",
+        GOLD: "bg-yellow-500",
     }
 
     // Get top 3 for podium (or empty placeholders)
